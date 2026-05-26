@@ -351,7 +351,8 @@ class NovelGenerator:
                 stream = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperaturmax_tokens=max_tokens,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
                     timeout=90,
                     stream=True
                 )
