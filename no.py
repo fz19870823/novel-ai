@@ -681,25 +681,11 @@ class NovelGenerator:
         return len(scenes) > 0
 
     def _count_words(self, text: str) -> int:
-        """准确计算中文字数（中文字符 + 英文单词）- 优化版本"""
-        if not text:
-            return 0
-        chinese_count = 0
-        english_word_count = 0
-        in_english = False
-
-        for char in text:
-            if '一' <= char <= '鿿':  # 中文字符范围
-                chinese_count += 1
-                in_english = False
-            elif char.isalpha():
-                if not in_english:
-                    english_word_count += 1
-                    in_english = True
-            else:
-                in_english = False
-
-        return chinese_count + english_word_count
+        """准确计算中文字数（中文字符 + 英文单词）"""
+        chinese_count = len(re.findall(r'[一-鿿]', text))
+        english_words = len(re.findall(r'\b[a-zA-Z]+\b', text))
+        numbers = len(re.findall(r'\d+', text))
+        return chinese_count + english_words + numbers
 
     def _get_dynamic_temperature(self, round_num: int, total_rounds: int) -> float:
         """根据迭代轮数动态调整温度参数"""
@@ -728,21 +714,99 @@ class NovelGenerator:
             return int(base_tokens * 1.3)
 
     def _generate_fallback_scenes(self) -> List[Dict]:
-        """生成备用场景列表（当JSON解析失败时使用）"""
-        scenes = []
-        for ch_num in range(1, self.chapters_count + 1):
-            outline = self.chapter_outlines[ch_num - 1] if ch_num <= len(self.chapter_outlines) else f"第{ch_num}章"
-            for scene_id in range(1, self.scenes_per_chapter + 1):
-                scenes.append({
-                    "chapter": ch_num,
-                    "scene_id": scene_id,
-                    "word_target": self.words_per_scene,
-                    "summary": f"{outline} - 场景{scene_id}",
-                    "characters": ["主角"],
-                    "emotion": "中立",
-                    "location": "待定"
-                })
-        return scenes
+        """两轮迭代写出 ch_start 到 ch_end 章"""
+        num_chapters = ch_end - ch_start + 1
+        total_target = self.words_per_chapter * num_chapters
+        
+        # 组装这批章的安排
+        chunk_scenes = ""
+        for c in range(ch_start, ch_end + 1):
+            outline = ""
+            if c <= len(self.chapter_outlines):
+                outline = self.chapter_outlines[c - 1]
+            scene_lines = [f"  {i+1}. {s.get('summary','')}"
+                           for i, s in enumerate(chapter_scenes.get(c, []))]
+            chunk_scenes += f"\n=== 第{c}章 ===\n大纲：{outline}\n场景安排：\n" + "\n".join(scene_lines) + "\n"
+        
+        current_text = ""
+        current_len = 0
+        
+        for round_num in range(1, self.ROUNDS + 1):
+            if not self.is_running:
+                raise Exception("用户停止生成")
+            
+            self._update_progress(
+                25 + int(((ch_start - 1 + (ch_end - ch_start + 1) * round_num / self.ROUNDS) / self.chapters_count) * 70),
+                f"第{ch_start}-{ch_end}章 第{round_num}/{self.ROUNDS}轮"
+            )
+            
+            if round_num == 1:
+                per_chapter_target = self.words_per_chapter
+                instruction = f"""写出第{ch_start}章到第{ch_end}章的初稿。每章必须达到{per_chapter_target}字以上，总计{total_target}字。确保情节连贯，按场景安排推进。"""
+                temperature = self._get_dynamic_temperature(round_num, self.ROUNDS)
+            else:
+                shortfall = max(0, total_target - current_len)
+                if shortfall > 0:
+                    instruction = f"""上一轮只写了{current_len}字（目标{total_target}字），还差{shortfall}字！请在保持情节不变的前提下，从以下方面大幅扩充每章：
+- 环境描写（详细刻画场景）
+- 角色内心（想法、感受、回忆）
+- 对话互动（每段对话至少3轮）
+- 动作细节（具体的肢体语言）
+- 氛围渲染
+必须扩充到{total_target}字以上，不要删减任何已有内容。"""
+                else:
+                    instruction = f"润色文字，检查连贯性。保持{total_target}字以上。"
+                temperature = self._get_dynamic_temperature(round_num, self.ROUNDS)
+            
+            prev_block = f"【上一轮内容】\n{current_text}" if current_text else ""
+
+            # 使用动态前情回顾
+            dynamic_prev_context = self._get_prev_context(prev_context, self.words_per_chapter)
+
+            prompt = f"""你是专业小说家。请写出第{ch_start}章到第{ch_end}章的正文。
+
+【核心设定】
+{self.setting_bible}
+
+【这批章的安排】
+{chunk_scenes}
+
+【前情回顾】
+{dynamic_prev_context}
+
+{prev_block}
+
+【本轮任务】
+{instruction}
+
+【输出格式】
+每章开头用「@@第N章@@」独占一行标记（N为章号），标记后直接写该章的正文。不要写章节标题。
+"""
+            
+            system = "你是专业小说家，擅长长篇写作。每章必须字数达标，内容丰富。"
+            
+            response = self.call_grok(
+                prompt,
+                system=system,
+                max_tokens=self._calculate_max_tokens(total_target, round_num, self.ROUNDS),
+                temperature=temperature
+            )
+            current_text = response
+            current_len = self._count_words(response)
+            self._log(f"📝 第{ch_start}-{ch_end}章 第{round_num}/{self.ROUNDS}轮完成 ({current_len}字/目标{total_target}字)")
+        
+        # 拆分各章
+        chapters_dict = self._parse_chapters_from_text(current_text, ch_start, ch_end)
+
+        for ch_num, ch_text in chapters_dict.items():
+            self.chapters[ch_num] = [ch_text]
+            self._log(f"✅ 第{ch_num}章完成 ({len(ch_text)}字)")
+            self._save_state("layer4", ch_num)
+
+        # 检查是否有缺失的章节
+        missing = [c for c in range(ch_start, ch_end + 1) if c not in chapters_dict]
+        if missing:
+            self._log(f"⚠️ 第{ch_start}-{ch_end}章中缺失: {missing}")
     
     def layer4_write_scenes(self, start_chapter: int = 1) -> str:
         """第4层：批量写作 + 三轮迭代（动态分批）"""
@@ -972,7 +1036,43 @@ class NovelGeneratorGUI:
         
         ttk.Button(control_frame, text="清空日志", command=self._clear_log).pack(side=tk.LEFT)
         ttk.Button(control_frame, text="保存日志", command=self._save_log).pack(side=tk.LEFT)
-    
+
+        # 为文本框添加右键菜单
+        for widget in [self.theme_text, self.req_text, self.log_text]:
+            widget.bind("<Button-3>", self._show_context_menu)
+
+    def _show_context_menu(self, event):
+        """显示右键菜单"""
+        widget = event.widget
+        menu = tk.Menu(widget, tearoff=0)
+        menu.add_command(label="剪切", command=lambda: widget.event_generate("<<Cut>>"))
+        menu.add_command(label="复制", command=lambda: widget.event_generate("<<Copy>>"))
+        menu.add_command(label="粘贴", command=lambda: widget.event_generate("<<Paste>>"))
+        menu.add_separator()
+        menu.add_command(label="全选", command=lambda: self._select_all(widget))
+        menu.add_command(label="删除", command=lambda: self._delete_all(widget))
+
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _select_all(self, widget):
+        """全选文本"""
+        try:
+            widget.tag_add(tk.SEL, "1.0", tk.END)
+            widget.mark_set(tk.INSERT, "1.0")
+            widget.see(tk.INSERT)
+        except:
+            pass
+
+    def _delete_all(self, widget):
+        """删除所有文本"""
+        try:
+            widget.delete("1.0", tk.END)
+        except:
+            pass
+
     def _save_config(self):
         self.config = {
             "api_key": self.api_key_var.get(),
