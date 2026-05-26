@@ -364,6 +364,9 @@ class NovelGenerator:
                     # 提取流式内容
                     if chunk.choices[0].delta.content:
                         content += chunk.choices[0].delta.content
+                        # 实时更新GUI中的内容显示
+                        if hasattr(self, '_update_content_display'):
+                            self._update_content_display(content)
 
                 self.call_count += 1
                 if not content:
@@ -1040,11 +1043,27 @@ class NovelGeneratorGUI:
         self.words_per_chapter_var = tk.StringVar()
         ttk.Entry(chapter_frame, textvariable=self.words_per_chapter_var, width=8).pack(side=tk.LEFT, padx=(2, 0))
         
-        # ===== 输出区域 =====
-        output_frame = ttk.LabelFrame(main_frame, text="生成日志", padding="10")
+        # ===== 输出区域（左右分屏）=====
+        output_frame = ttk.LabelFrame(main_frame, text="生成内容", padding="10")
         output_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-        
-        self.log_text = scrolledtext.ScrolledText(output_frame, height=10, wrap=tk.WORD)
+
+        # 创建左右两个面板
+        left_right_frame = ttk.Frame(output_frame)
+        left_right_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 左边：实时流式内容显示（带滑动窗口）
+        left_frame = ttk.LabelFrame(left_right_frame, text="实时内容（最近1000字）", padding="5")
+        left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+
+        self.content_text = scrolledtext.ScrolledText(left_frame, height=10, wrap=tk.WORD, bg="#f0f0f0")
+        self.content_text.pack(fill=tk.BOTH, expand=True)
+        self.content_text.config(state=tk.DISABLED)  # 只读
+
+        # 右边：日志
+        right_frame = ttk.LabelFrame(left_right_frame, text="生成日志", padding="5")
+        right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+
+        self.log_text = scrolledtext.ScrolledText(right_frame, height=10, wrap=tk.WORD)
         self.log_text.pack(fill=tk.BOTH, expand=True)
         
         # 进度条
@@ -1069,7 +1088,8 @@ class NovelGeneratorGUI:
         self.stop_btn = ttk.Button(control_frame, text="停止", command=self._stop_generation, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=(0, 10))
 
-        ttk.Button(control_frame, text="清空日志", command=self._clear_log).pack(side=tk.LEFT)
+        ttk.Button(control_frame, text="清空日志", command=self._clear_log).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(control_frame, text="清空内容", command=self._clear_content_display).pack(side=tk.LEFT, padx=(0, 5))
         ttk.Button(control_frame, text="保存日志", command=self._save_log).pack(side=tk.LEFT)
 
         # 为所有文本框和输入框添加右键菜单
@@ -1217,7 +1237,27 @@ class NovelGeneratorGUI:
         self.log_text.insert(tk.END, message + "\n")
         self.log_text.see(tk.END)
         self.root.update_idletasks()
-    
+
+    def _update_content_display(self, content: str):
+        """实时更新左边的内容显示（滑动窗口，最多显示1000字）"""
+        self.content_text.config(state=tk.NORMAL)
+
+        # 只保留最后1000字（滑动窗口）
+        display_content = content[-1000:] if len(content) > 1000 else content
+
+        # 更新显示
+        self.content_text.delete("1.0", tk.END)
+        self.content_text.insert(tk.END, display_content)
+        self.content_text.see(tk.END)
+        self.content_text.config(state=tk.DISABLED)
+        self.root.update_idletasks()
+
+    def _clear_content_display(self):
+        """清空内容显示"""
+        self.content_text.config(state=tk.NORMAL)
+        self.content_text.delete("1.0", tk.END)
+        self.content_text.config(state=tk.DISABLED)
+
     def _clear_log(self):
         self.log_text.delete("1.0", tk.END)
     
