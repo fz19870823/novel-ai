@@ -332,7 +332,7 @@ class NovelGenerator:
             self._log(f"⚠️ 保存断点失败: {e}")
     
     def call_grok(self, prompt: str, system: str = "", max_tokens: int = 4000,
-                  temperature: float = 0.75) -> str:
+                  temperature: float = 0.75, show_stream: bool = True) -> str:
         if not self.is_running:
             raise Exception("用户停止生成")
 
@@ -365,7 +365,7 @@ class NovelGenerator:
                     if chunk.choices[0].delta.content:
                         content += chunk.choices[0].delta.content
                         # 实时更新GUI中的内容显示
-                        if hasattr(self, '_update_content_display'):
+                        if show_stream and hasattr(self, '_update_content_display'):
                             self._update_content_display(content)
 
                 self.call_count += 1
@@ -456,7 +456,7 @@ class NovelGenerator:
         
         max_attempts = 3
         for attempt in range(max_attempts):
-            result = self.call_grok(prompt, system="你是专业小说架构师，擅长根据用户需求生成详细设定。", max_tokens=12000)
+            result = self.call_grok(prompt, system="你是专业小说架构师，擅长根据用户需求生成详细设定。", max_tokens=12000, show_stream=True)
             
             # 用户确认
             confirmed = self._confirm_with_user(
@@ -547,7 +547,8 @@ class NovelGenerator:
             response = self.call_grok(
                 prompt,
                 system="输出结构化的章节大纲，注意前后连贯。",
-                max_tokens=max(12000, batch_count * 500)
+                max_tokens=max(12000, batch_count * 500),
+                show_stream=True
             )
             
             # 尝试多种分隔符解析
@@ -614,7 +615,7 @@ class NovelGenerator:
         
         max_attempts = 3
         for attempt in range(max_attempts):
-            response = self.call_grok(prompt, system="只输出合法的JSON数组。", max_tokens=max(20000, total_scenes_estimate * 150))
+            response = self.call_grok(prompt, system="只输出合法的JSON数组。", max_tokens=max(20000, total_scenes_estimate * 150), show_stream=True)
             
             try:
                 if "```json" in response:
@@ -806,6 +807,7 @@ class NovelGenerator:
             response = self.call_grok(
                 prompt,
                 system=system,
+                show_stream=True,
                 max_tokens=self._calculate_max_tokens(total_target, round_num, self.ROUNDS),
                 temperature=temperature
             )
