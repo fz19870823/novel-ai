@@ -229,7 +229,8 @@ class NovelGenerator:
         # 动态计算每批章数（控制单次输出在 8000 字左右，模型能稳定产出）
         target_output = 8000
         self.chunk_size = max(1, min(10, target_output // max(1, self.words_per_chapter)))
-        
+        self.ROUNDS = WRITE_ROUNDS  # 迭代轮数
+
         self.client = None
         self.call_count = 0
         self.is_running = True
