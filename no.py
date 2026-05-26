@@ -959,11 +959,13 @@ class NovelGeneratorGUI:
         
         ttk.Label(config_frame, text="Base URL:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
         self.base_url_var = tk.StringVar(value=self.config.get("base_url", "https://api.x.ai/v1"))
-        ttk.Entry(config_frame, textvariable=self.base_url_var, width=60).grid(row=0, column=1, sticky=tk.W+tk.E)
-        
+        self.base_url_entry = ttk.Entry(config_frame, textvariable=self.base_url_var, width=60)
+        self.base_url_entry.grid(row=0, column=1, sticky=tk.W+tk.E)
+
         ttk.Label(config_frame, text="API Key:").grid(row=1, column=0, sticky=tk.W, padx=(0, 10), pady=(10, 0))
         self.api_key_var = tk.StringVar(value=self.config.get("api_key", ""))
-        ttk.Entry(config_frame, textvariable=self.api_key_var, width=60, show="*").grid(row=1, column=1, sticky=tk.W+tk.E, pady=(10, 0))
+        self.api_key_entry = ttk.Entry(config_frame, textvariable=self.api_key_var, width=60, show="*")
+        self.api_key_entry.grid(row=1, column=1, sticky=tk.W+tk.E, pady=(10, 0))
         
         ttk.Label(config_frame, text="Model:").grid(row=2, column=0, sticky=tk.W, padx=(0, 10), pady=(10, 0))
         
@@ -1034,9 +1036,50 @@ class NovelGeneratorGUI:
         self.stop_btn = ttk.Button(control_frame, text="停止", command=self._stop_generation, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=(0, 10))
         
-        ttk.Button(control_frame, text="清空日志", command=self._clear_log).pack(side=tk.LEFT)
-        ttk.Button(control_frame, text="保存日志", command=self._save_log).pack(side=tk.LEFT)
-    
+        ttk.Button(control_frame).pack(side=tk.LEcontrol_frame, text="保存日志", command=self._save_log).pack(side=tk.LEFT)
+
+        # 为所有文本框和输入框添加右键菜单
+        for widget in [self.theme_text, self.req_text, self.log_text, self.base_url_entry, self.api_key_entry]:
+            widget.bind("<Button-3>", self._show_context_menu)
+
+    def _show_context_menu(self, event):
+        """显示右键菜单"""
+        widget = event.widget
+        menu = tk.Menu(widget, tearoff=0)
+        menu.add_command(label="剪切", command=lambda: widget.event_generate("<<Cut>>"))
+        menu.add_command(label="复制", command=lambda: widget.event_generate("<<Copy>>"))
+        menu.add_command(label="粘贴", command=lambda: widget.event_generate("<<Paste>>"))
+        menu.add_separator()
+        menu.add_command(label="全选", command=lambda: self._select_all(widget))
+        menu.add_command(label="删除", command=lambda: self._delete_all(widget))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def _select_all(self, widget):
+        """全选文本"""
+        try:
+            if isinstance(widget, tk.Entry):
+                widget.select_range(0, tk.END)
+                widget.icursor(tk.END)
+            else:
+                widget.tag_add(tk.SEL, "1.0", tk.END)
+                widget.mark_set(tk.INSERT, "1.0")
+                widget.see(tk.INSERT)
+        except:
+            pass
+
+    def _delete_all(self, widget):
+        """删除所有文本"""
+        try:
+            if isinstance(widget, tk.Entry):
+                widget.delete(0, tk.END)
+            else:
+                widget.delete("1.0", tk.END)
+        except:
+            pass
+
     def _save_config(self):
         self.config = {
             "api_key": self.api_key_var.get(),
