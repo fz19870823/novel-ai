@@ -993,12 +993,12 @@ class NovelGeneratorGUI:
         ttk.Label(input_frame, text="主题（一句话创意）:").pack(anchor=tk.W)
         self.theme_text = scrolledtext.ScrolledText(input_frame, height=3, wrap=tk.WORD)
         self.theme_text.pack(fill=tk.X, pady=(5, 10))
-        self.theme_text.insert(tk.END, "一个普通图书管理员发现一本可以改写现实的无字之书，但每次改写都需要付出等价的记忆作为代价")
+        self.theme_text.insert(tk.END, self.config.get("theme", "一个普通图书管理员发现一本可以改写现实的无字之书，但每次改写都需要付出等价的记忆作为代价"))
         
         ttk.Label(input_frame, text="要求（字数、风格、特殊需求等）:").pack(anchor=tk.W)
         self.req_text = scrolledtext.ScrolledText(input_frame, height=5, wrap=tk.WORD)
         self.req_text.pack(fill=tk.X, pady=(5, 10))
-        self.req_text.insert(tk.END, "5万字，第三人称，风格温暖治愈但有悬疑感，主角为女性，有3个主要配角")
+        self.req_text.insert(tk.END, self.config.get("requirements", "5万字，第三人称，风格温暖治愈但有悬疑感，主角为女性，有3个主要配角"))
         
         # 章节设定
         chapter_frame = ttk.Frame(input_frame)
@@ -1090,7 +1090,9 @@ class NovelGeneratorGUI:
             "base_url": self.base_url_var.get(),
             "model": self.model_var.get(),
             "chapters_count": self.chapters_count_var.get(),
-            "words_per_chapter": self.words_per_chapter_var.get()
+            "words_per_chapter": self.words_per_chapter_var.get(),
+            "theme": self.theme_text.get("1.0", tk.END).strip(),
+            "requirements": self.req_text.get("1.0", tk.END).strip()
         }
         save_config(self.config)
         self._log("✅ 配置已保存")
