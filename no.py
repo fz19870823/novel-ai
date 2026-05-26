@@ -335,6 +335,10 @@ class NovelGenerator:
         if not self.is_running:
             raise Exception("用户停止生成")
 
+        # 将system信息合并到prompt中（Grok API不支持system参数）
+        if system:
+            prompt = f"{system}\n\n{prompt}"
+
         messages = [{"role": "user", "content": prompt}]
 
         for attempt in range(3):
@@ -346,8 +350,7 @@ class NovelGenerator:
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    timeout=90,
-                    system=system if system else None
+                    timeout=90
                 )
                 self.call_count += 1
                 content = response.choices[0].message.content
