@@ -717,8 +717,8 @@ class NovelGenerator:
         else:
             return int(base_tokens * 1.3)
 
-    def _generate_fallback_scenes(self) -> List[Dict]:
-        """两轮迭代写出 ch_start 到 ch_end 章"""
+    def _write_chapter_chunk(self, ch_start: int, ch_end: int, chapter_scenes: Dict, prev_context: str):
+        """批量写作一个章节批次，三轮迭代"""
         num_chapters = ch_end - ch_start + 1
         total_target = self.words_per_chapter * num_chapters
         
@@ -811,7 +811,25 @@ class NovelGenerator:
         missing = [c for c in range(ch_start, ch_end + 1) if c not in chapters_dict]
         if missing:
             self._log(f"⚠️ 第{ch_start}-{ch_end}章中缺失: {missing}")
-    
+
+    def _generate_fallback_scenes(self) -> List[Dict]:
+        """生成基础场景结构（当API返回无效JSON时使用）"""
+        scenes = []
+        scenes_per_chapter = max(2, self.words_per_scene // 100)
+
+        for ch_num in range(1, self.chapters_count + 1):
+            for scene_idx in range(scenes_per_chapter):
+                scenes.append({
+                    "chapter": ch_num,
+                    "scene_id": f"ch{ch_num}_sc{scene_idx+1}",
+                    "summary": f"第{ch_num}章场景{scene_idx+1}",
+                    "word_target": self.words_per_scene,
+                    "characters": ["主角"],
+                    "location": "故事场景"
+                })
+
+        return scenes
+
     def layer4_write_scenes(self, start_chapter: int = 1) -> str:
         """第4层：批量写作 + 三轮迭代（动态分批）"""
         self._log(f"\n✍️ 第4层：批量写作（{self.chunk_size}章/批 × {self.ROUNDS}轮迭代）...")
