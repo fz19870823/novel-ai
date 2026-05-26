@@ -1035,8 +1035,9 @@ class NovelGeneratorGUI:
         
         self.stop_btn = ttk.Button(control_frame, text="停止", command=self._stop_generation, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Button(control_frame).pack(side=tk.LEcontrol_frame, text="保存日志", command=self._save_log).pack(side=tk.LEFT)
+
+        ttk.Button(control_frame, text="清空日志", command=self._clear_log).pack(side=tk.LEFT)
+        ttk.Button(control_frame, text="保存日志", command=self._save_log).pack(side=tk.LEFT)
 
         # 为所有文本框和输入框添加右键菜单
         for widget in [self.theme_text, self.req_text, self.log_text, self.base_url_entry, self.api_key_entry]:
