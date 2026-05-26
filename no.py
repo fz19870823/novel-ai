@@ -346,15 +346,25 @@ class NovelGenerator:
             if not self.is_running:
                 raise Exception("用户停止生成")
             try:
-                response = self.client.chat.completions.create(
+                # 使用流式接收，支持随时停止
+                content = ""
+                stream = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    timeout=90
+                    temperaturmax_tokens=max_tokens,
+                    timeout=90,
+                    stream=True
                 )
+
+                for chunk in stream:
+                    # 检查用户是否停止生成
+                    if not self.is_running:
+                        raise Exception("用户停止生成")
+                    # 提取流式内容
+                    if chunk.choices[0].delta.content:
+                        content += chunk.choices[0].delta.content
+
                 self.call_count += 1
-                content = response.choices[0].message.content
                 if not content:
                     self._log(f"⚠️ API返回空内容 ({attempt+1}/3)")
                     if attempt < 2:
@@ -362,7 +372,7 @@ class NovelGenerator:
                         continue
                     else:
                         raise Exception("API连续3次返回空内容")
-                self._log(f"📊 累计调用: {self.call_count} 次")
+                self._log(f"📊 累计调用: {self.call_count} 次 (流式 {len(content)} 字)")
                 return content
             except Exception as e:
                 if not self.is_running:
