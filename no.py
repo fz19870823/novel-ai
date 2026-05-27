@@ -963,7 +963,7 @@ class NovelGeneratorGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("小说自动生成器 - Grok版（带用户确认）")
-        self.root.geometry("900x750")
+        self.root.geometry("900x900")
         
         self.config = load_config()
         self.generator = None
