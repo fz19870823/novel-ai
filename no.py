@@ -973,6 +973,10 @@ class NovelGeneratorGUI:
         # 用于同步确认对话框
         self.confirm_result = None
         self.confirm_event = threading.Event()
+
+        # 流式显示缓冲（激进缓冲，避免闪烁）
+        self._pending_content = ""  # 待显示的内容
+        self._display_update_scheduled = False  # 是否已经调度了更新
         
         self._setup_ui()
         
@@ -1053,13 +1057,37 @@ class NovelGeneratorGUI:
         left_right_frame = ttk.Frame(output_frame)
         left_right_frame.pack(fill=tk.BOTH, expand=True)
 
-        # 左边：实时流式内容显示（带滑动窗口）
+        # 左边：实时流式内容显示（Canvas 无闪烁方案）
         left_frame = ttk.LabelFrame(left_right_frame, text="实时内容（最近1000字）", padding="5")
         left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
 
-        self.content_text = scrolledtext.ScrolledText(left_frame, height=10, wrap=tk.WORD, bg="#f0f0f0")
-        self.content_text.pack(fill=tk.BOTH, expand=True)
-        self.content_text.config(state=tk.DISABLED)  # 只读
+        # 使用 Canvas 替代 Text 控件，实现无闪烁显示
+        # 创建一个框架来容纳 Canvas 和滚动条
+        canvas_frame = ttk.Frame(left_frame)
+        canvas_frame.pack(fill=tk.BOTH, expand=True)
+
+        # 创建滚动条
+        scrollbar = ttk.Scrollbar(canvas_frame)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # 创建 Canvas
+        self.content_canvas = tk.Canvas(
+            canvas_frame,
+            bg="#e8e8e8",  # 电子屏背景
+            highlightthickness=0,
+            cursor="arrow",
+            yscrollcommand=scrollbar.set
+        )
+        self.content_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.config(command=self.content_canvas.yview)
+
+        # Canvas 内容缓冲
+        self._canvas_content = ""
+        self._canvas_text_id = None
+        self._canvas_scroll_region = None
+
+        # 绑定 Canvas 尺寸变化事件
+        self.content_canvas.bind("<Configure>", self._on_canvas_configure)
 
         # 右边：日志
         right_frame = ttk.LabelFrame(left_right_frame, text="生成日志", padding="5")
@@ -1241,24 +1269,69 @@ class NovelGeneratorGUI:
         self.root.update_idletasks()
 
     def _update_content_display(self, content: str):
-        """实时更新左边的内容显示（滑动窗口，最多显示1000字）"""
-        self.content_text.config(state=tk.NORMAL)
-
+        """实时更新左边的内容显示（Canvas 无闪烁方案）"""
         # 只保留最后1000字（滑动窗口）
-        display_content = content[-1000:] if len(content) > 1000 else content
+        self._canvas_content = content[-1000:] if len(content) > 1000 else content
 
-        # 更新显示
-        self.content_text.delete("1.0", tk.END)
-        self.content_text.insert(tk.END, display_content)
-        self.content_text.see(tk.END)
-        self.content_text.config(state=tk.DISABLED)
-        self.root.update_idletasks()
+        # 立即绘制到 Canvas（无延迟，因为 Canvas 不会闪烁）
+        self._draw_canvas_content()
+
+    def _draw_canvas_content(self):
+        """在 Canvas 上绘制文本内容"""
+        try:
+            # 清空 Canvas
+            self.content_canvas.delete("all")
+
+            # 如果没有内容，直接返回
+            if not self._canvas_content:
+                return
+
+            # 获取 Canvas 尺寸
+            width = self.content_canvas.winfo_width()
+            height = self.content_canvas.winfo_height()
+
+            # 如果 Canvas 还没有尺寸，使用默认值
+            if width <= 1:
+                width = 400
+            if height <= 1:
+                height = 300
+
+            # 在 Canvas 上绘制文本
+            # 使用 create_text 绘制，支持自动换行
+            text_id = self.content_canvas.create_text(
+                10, 10,
+                text=self._canvas_content,
+                anchor="nw",
+                font=("Courier", 10),
+                fill="#000000",
+                width=width - 20,
+                justify="left"
+            )
+
+            # 获取文本的边界框
+            bbox = self.content_canvas.bbox(text_id)
+            if bbox:
+                # 设置滚动区域
+                self.content_canvas.config(scrollregion=bbox)
+
+            # 滚动到底部
+            self.content_canvas.yview_moveto(1.0)
+
+        except tk.TclError:
+            # Canvas 已销毁，忽略错误
+            pass
+
+    def _on_canvas_configure(self, event):
+        """Canvas 尺寸变化时重新绘制"""
+        self._draw_canvas_content()
 
     def _clear_content_display(self):
         """清空内容显示"""
-        self.content_text.config(state=tk.NORMAL)
-        self.content_text.delete("1.0", tk.END)
-        self.content_text.config(state=tk.DISABLED)
+        self._canvas_content = ""
+        try:
+            self.content_canvas.delete("all")
+        except tk.TclError:
+            pass
 
     def _clear_log(self):
         self.log_text.delete("1.0", tk.END)

@@ -7,7 +7,27 @@
       "Bash(git commit *)",
       "Bash(gh repo *)",
       "Bash(git push *)",
-      "Bash(python -m py_compile no.py)"
+      "Bash(python -m py_compile no.py)",
+      "Bash(python patch_context_menu.py)",
+      "Bash(python -m  no.py)",
+      "Bash(pyn -m py_compile no.py)",
+      "Bash(python3)",
+      "Bash(python3 fix_no.py)",
+      "Bash(python3 -m py_compile no.py)",
+      "Bash(git restore *)",
+      "Bash(python3 add_method.py)",
+      "Bash(python3 -c \"from no import NovelGenerator; print\\('✓ Import successful'\\)\")",
+      "Bash(python3 -c \"from no import NovelGenerator; print\\('OK'\\)\")",
+      "Bash(python3 update_streaming.py)",
+      "Bash(python3 -c \"from no import NovelGeneratorGUI; print\\('OK'\\)\")",
+      "Bash(python3 update_streaming_all.py)",
+      "Bash(python no.py)",
+      "Bash(cat)",
+      "Bash(python3 /tmp/update_method.py)",
+      "Bash(cat > *)",
+      "Bash(git checkout *)",
+      "Bash(pip list *)",
+      "Bash(python -m py_compile novel_pyside.py)"
     ]
   }
 }
